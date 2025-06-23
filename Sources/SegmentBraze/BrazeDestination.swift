@@ -244,9 +244,9 @@ public class BrazeDestination: DestinationPlugin, VersionedPlugin {
       setAttributionData(properties: properties)
     case Keys.purchaseEventName1.rawValue where treatAsPurchase,
       Keys.purchaseEventName2.rawValue where treatAsPurchase:
-      logPurchase(name: event.event, properties: event.properties?.dictionaryValue ?? [:])
+        logPurchase(name: event.event, properties: event.properties?.dictionaryValue?.deeplyUnwrapped() ?? [:])
     default:
-      logCustomEvent(name: event.event, properties: event.properties?.dictionaryValue)
+        logCustomEvent(name: event.event, properties: event.properties?.dictionaryValue?.deeplyUnwrapped())
     }
 
     return event
@@ -500,4 +500,27 @@ private struct BrazeSettings: Codable {
     case automaticInAppMessageRegistrationEnabled = "automatic_in_app_message_registration_enabled"
     case logPurchaseWhenRevenuePresent
   }
+}
+
+extension Dictionary where Key == String {
+    func deeplyUnwrapped() -> [String: Any] {
+        var newDict: [String: Any] = [:]
+        for (key, value) in self {
+            newDict[key] = unwrap(value)
+        }
+        return newDict
+    }
+
+    private func unwrap(_ any: Any) -> Any {
+        let mirror = Mirror(reflecting: any)
+        if mirror.displayStyle == .optional {
+            if let first = mirror.children.first {
+                return unwrap(first.value) // recursively unwrap
+            } else {
+                return NSNull() // represent `nil` explicitly if needed
+            }
+        } else {
+            return any
+        }
+    }
 }
