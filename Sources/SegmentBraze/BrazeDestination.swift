@@ -382,7 +382,6 @@ public class BrazeDestination: DestinationPlugin, VersionedPlugin {
     var properties = properties
     properties?["revenue"] = nil
     properties?["currency"] = nil
-      properties?["user_location_longitude"] = 123.123
     braze?.logCustomEvent(name: name, properties: properties?.deeplyUnwrapped())
   }
 
@@ -519,28 +518,9 @@ extension Dictionary where Key == String, Value == Any {
                     result[key] = number.doubleValue
                 }
             }
-            // Optional unwrapping via Mirror (without protocols)
-            else if let unwrapped = unwrap(value) {
-                if let decimal = unwrapped as? NSDecimalNumber {
-                    result[key] = decimal.doubleValue
-                } else if let number = unwrapped as? NSNumber {
-                    let type = String(cString: number.objCType)
-                    if type == "f" || type == "d" {
-                        result[key] = number.doubleValue
-                    }
-                }
-            }
         }
 
         return result
-    }
-
-    private func unwrap(_ any: Any) -> Any? {
-        let mirror = Mirror(reflecting: any)
-        if mirror.displayStyle != .optional {
-            return nil
-        }
-        return mirror.children.first?.value
     }
 }
 
