@@ -244,9 +244,9 @@ public class BrazeDestination: DestinationPlugin, VersionedPlugin {
       setAttributionData(properties: properties)
     case Keys.purchaseEventName1.rawValue where treatAsPurchase,
       Keys.purchaseEventName2.rawValue where treatAsPurchase:
-        logPurchase(name: event.event, properties: event.properties?.dictionaryValue?.deeplyUnwrapped() ?? [:])
+      logPurchase(name: event.event, properties: event.properties?.dictionaryValue ?? [:])
     default:
-        logCustomEvent(name: event.event, properties: event.properties?.dictionaryValue?.deeplyUnwrapped())
+      logCustomEvent(name: event.event, properties: event.properties?.dictionaryValue)
     }
 
     return event
@@ -362,7 +362,7 @@ public class BrazeDestination: DestinationPlugin, VersionedPlugin {
           currency: currency,
           price: price,
           quantity: quantity ?? 0,
-          properties: productProperties
+          properties: productProperties.deeplyUnwrapped()
         )
       }
       return
@@ -374,7 +374,7 @@ public class BrazeDestination: DestinationPlugin, VersionedPlugin {
       productId: name,
       currency: currency,
       price: price,
-      properties: properties
+      properties: properties.deeplyUnwrapped()
     )
   }
 
@@ -382,7 +382,8 @@ public class BrazeDestination: DestinationPlugin, VersionedPlugin {
     var properties = properties
     properties?["revenue"] = nil
     properties?["currency"] = nil
-    braze?.logCustomEvent(name: name, properties: properties)
+      properties?["user_location_longitude"] = 123.123
+    braze?.logCustomEvent(name: name, properties: properties?.deeplyUnwrapped())
   }
 
   private func extractRevenue(key: String, from properties: [String: Any]?) -> Double? {
@@ -502,25 +503,44 @@ private struct BrazeSettings: Codable {
   }
 }
 
-extension Dictionary where Key == String {
+extension Dictionary where Key == String, Value == Any {
     func deeplyUnwrapped() -> [String: Any] {
-        var newDict: [String: Any] = [:]
+        var result = self
+
         for (key, value) in self {
-            newDict[key] = unwrap(value)
+            // Check for NSDecimalNumber
+            if let decimal = value as? NSDecimalNumber {
+                result[key] = decimal.doubleValue
+            }
+            // Check for NSNumber and ensure it's a float/double
+            else if let number = value as? NSNumber {
+                let type = String(cString: number.objCType)
+                if type == "f" || type == "d" {
+                    result[key] = number.doubleValue
+                }
+            }
+            // Optional unwrapping via Mirror (without protocols)
+            else if let unwrapped = unwrap(value) {
+                if let decimal = unwrapped as? NSDecimalNumber {
+                    result[key] = decimal.doubleValue
+                } else if let number = unwrapped as? NSNumber {
+                    let type = String(cString: number.objCType)
+                    if type == "f" || type == "d" {
+                        result[key] = number.doubleValue
+                    }
+                }
+            }
         }
-        return newDict
+
+        return result
     }
 
-    private func unwrap(_ any: Any) -> Any {
+    private func unwrap(_ any: Any) -> Any? {
         let mirror = Mirror(reflecting: any)
-        if mirror.displayStyle == .optional {
-            if let first = mirror.children.first {
-                return unwrap(first.value) // recursively unwrap
-            } else {
-                return NSNull() // represent `nil` explicitly if needed
-            }
-        } else {
-            return any
+        if mirror.displayStyle != .optional {
+            return nil
         }
+        return mirror.children.first?.value
     }
 }
+
